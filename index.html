@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>極簡手機閱讀器</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="vendor/tailwind.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar hiding for clean look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="極簡閱讀器">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="極簡手機閱讀器：TTS 朗讀、分頁、自動捲動、主題切換、閱讀歷史，可離線使用。">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+</head>
+<body class="h-full m-0 p-0 overflow-hidden transition-colors duration-300 bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 flex flex-col select-none" id="bodyRoot">
+
+    <!-- Custom Message Box for alerts without using alert() -->
+    <div id="msgBox" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 text-white px-4 py-2 rounded-xl shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 text-sm max-w-xs text-center">
+        提示訊息
+    </div>
+
+    <!-- Input View: Paste Text & History -->
+    <div id="inputView" class="flex-1 flex flex-col p-4 z-10 overflow-y-auto">
+        <div class="max-w-md w-full mx-auto flex-1 flex flex-col py-6">
+            <div class="mb-4 flex justify-between items-start">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight mb-1">手機口袋閱讀器</h1>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400">貼上長篇文字，享受沉浸式翻頁與跑馬燈閱讀。</p>
+                </div>
+                <button onclick="toggleHistoryModal(true)" class="px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium flex items-center gap-1.5 active:scale-95 transition-transform hover:bg-zinc-200 dark:hover:bg-zinc-800">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                    歷史記錄
+                </button>
+            </div>
+            
+            <div class="mb-3">
+                <input type="text" id="articleTitleInput" class="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="文章標題（選填）...">
+            </div>
+
+            <div class="flex-1 flex flex-col mb-4">
+                <textarea id="textInput" class="w-full flex-1 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed min-h-[220px]" placeholder="請在此貼上您要閱讀的文章內容..."></textarea>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="loadSampleText()" class="flex-1 py-3 px-4 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm font-medium active:scale-95 transition-transform hover:bg-zinc-100 dark:hover:bg-zinc-900">載入範例文章</button>
+                <button onclick="startReading()" class="flex-2 py-3 px-6 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-lg shadow-indigo-500/20 active:scale-95 transition-transform hover:bg-indigo-500 flex-1">開始閱讀</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                <h3 class="font-bold text-base">歷史文章記錄</h3>
+                <button onclick="toggleHistoryModal(false)" class="p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div id="historyListContainer" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <!-- Dynamically populated history cards -->
+            </div>
+            <div class="p-4 border-t border-zinc-200 dark:border-zinc-800 text-right">
+                <button onclick="clearHistory()" class="text-xs text-red-500 hover:underline px-3 py-1.5">清除所有記錄</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reader View: Fullscreen Immersive Display with Page-turn / Marquee -->
+    <div id="readerView" class="hidden flex-1 relative flex flex-col overflow-hidden">
+        
+        <!-- Tap Navigation Zones: Left (Prev Page), Right (Next Page) -->
+        <div class="absolute inset-0 z-20 flex pb-20">
+            <div class="w-1/2 h-full cursor-pointer" onclick="handleScreenTap('left')" title="上一頁"></div>
+            <div class="w-1/2 h-full cursor-pointer" onclick="handleScreenTap('right')" title="下一頁"></div>
+        </div>
+
+        <!-- Main Content Pagination Container -->
+        <div class="flex-1 p-6 md:p-12 pb-24 flex flex-col justify-between relative overflow-hidden select-none z-10">
+            <!-- Article Title Header -->
+            <div id="readerTitleDisplay" class="text-xs text-zinc-400 dark:text-zinc-600 font-medium tracking-wider truncate mb-2"></div>
+            
+            <!-- Paginated Text Content Area -->
+            <div class="flex-1 flex items-center justify-center">
+                <div id="readerContent" class="w-full max-w-2xl whitespace-pre-wrap leading-relaxed tracking-wide"></div>
+            </div>
+
+            <!-- Page Number Indicator -->
+            <div class="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-2">
+                第 <span id="currentPageNum">1</span> / <span id="totalPageNum">1</span> 頁
+            </div>
+        </div>
+
+        <!-- Auto Scroll Status Indicator -->
+        <div id="autoScrollIndicator" class="absolute top-4 right-4 z-30 bg-indigo-600/80 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
+            跑馬燈播放中 (<span id="speedIndicator">1x</span>)
+        </div>
+
+        <!-- Bottom Edge Toolbar (Always visible at screen bottom edge, non-fixed/non-blocking content flow) -->
+        <div id="controlsBar" class="absolute bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-around z-30 shadow-lg">
+            
+            <!-- Back to Home / Edit -->
+            <button onclick="backToInput()" class="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 active:scale-95 transition-transform flex flex-col items-center gap-0.5" title="回到首頁">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                <span class="text-[10px] font-medium">首頁</span>
+            </button>
+
+            <!-- Font Size Down -->
+            <button onclick="adjustFontSize(-2)" class="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 active:scale-95 transition-transform flex flex-col items-center gap-0.5" title="縮小字體">
+                <span class="font-bold text-xs leading-4">A-</span>
+                <span class="text-[10px] font-medium">縮小</span>
+            </button>
+
+            <!-- Font Size Up -->
+            <button onclick="adjustFontSize(2)" class="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 active:scale-95 transition-transform flex flex-col items-center gap-0.5" title="放大字體">
+                <span class="font-bold text-sm leading-4">A+</span>
+                <span class="text-[10px] font-medium">放大</span>
+            </button>
+
+            <!-- Theme Toggle -->
+            <button onclick="toggleTheme()" class="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 active:scale-95 transition-transform flex flex-col items-center gap-0.5" title="明暗切換">
+                <svg id="themeIconSun" class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                <svg id="themeIconMoon" class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                <span class="text-[10px] font-medium">明暗</span>
+            </button>
+
+            <!-- Marquee Speed Down -->
+            <button onclick="adjustMarqueeSpeed(-1)" class="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 active:scale-95 transition-transform flex flex-col items-center gap-0.5" title="減速">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                <span class="text-[10px] font-medium">減速</span>
+            </button>
+
+            <!-- Marquee Toggle -->
+            <button id="modeToggleBtn" onclick="toggleAutoScroll()" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-medium active:scale-95 transition-transform flex items-center gap-1 shadow-md">
+                <svg id="playPauseIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="modeBtnText">跑馬燈</span>
+            </button>
+
+            <!-- Marquee Speed Up -->
+            <button onclick="adjustMarqueeSpeed(1)" class="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 active:scale-95 transition-transform flex flex-col items-center gap-0.5" title="加速">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <span class="text-[10px] font-medium">加速</span>
+            </button>
+
+        </div>
+    </div>
+
+    <script>
+        // State Variables
+        let currentFontSize = 20; // Default font size in px
+        let isDarkMode = true;    // Default dark mode (black background)
+        let isAutoScrolling = false;
+        let autoScrollInterval = null;
+        let marqueeSpeedLevel = 2; // Speed levels: 1 (Slow), 2 (Normal), 3 (Fast), 4 (Very Fast)
+        const speeds = [7000, 4500, 2500, 12000]; // ms per page interval
+
+        // Pagination State
+        let fullText = '';
+        let articleTitle = '';
+        let pages = [];
+        let currentPageIndex = 0;
+        const CHARS_PER_PAGE = 300; // Estimated characters per page for mobile screen
+
+        // Initialize App Theme & History
+        function initApp() {
+            document.documentElement.classList.add('dark');
+            document.getElementById('readerContent').style.fontSize = currentFontSize + 'px';
+            renderHistoryList();
+        }
+
+        // Show custom notification message instead of alert()
+        function showMessage(text) {
+            const box = document.getElementById('msgBox');
+            box.innerText = text;
+            box.style.opacity = '1';
+            setTimeout(() => {
+                box.style.opacity = '0';
+            }, 2500);
+        }
+
+        // Load Sample Text
+        function loadSampleText() {
+            const sample = `《流光歲月與閱讀之美》
+
+在這個資訊爆炸的時代裡，我們每天都被無數零碎的短訊息與動態所淹沒。能夠靜下心來，專注閱讀一篇完整的文章，成了一種難能可貴的享受。
+
+手機閱讀器的誕生，正是為了讓閱讀回歸最純粹的本質。沒有繁雜的廣告干擾，沒有多餘的介面負擔，只有黑白純粹的文字與心靈的對話。
+
+您可以點擊畫面右側下一頁、左側上一頁輕鬆翻頁，適應您的視力需求放大縮小字體；您可以切換暗色模式保護雙眼免受強光刺眼；更可以開啟自動跑馬燈功能，在工具列上自由加速或減速，讓視線隨著緩慢流動的字句自然前行。
+
+文字是有力量的。當字體佈滿整個螢幕，底部的功能列隨時在側而不干擾，整個世界彷彿只剩下眼前的思想與故事。請好好享受這段專屬於您的閱讀時光。`;
+            document.getElementById('articleTitleInput').value = '流光歲月與閱讀之美';
+            document.getElementById('textInput').value = sample;
+            showMessage('已載入範例文章');
+        }
+
+        // LocalStorage History Management
+        function getHistory() {
+            try {
+                const data = localStorage.getItem('reader_history');
+                return data ? JSON.parse(data) : [];
+            } catch(e) {
+                return [];
+            }
+        }
+
+        function saveArticleToHistory(title, content) {
+            if (!content.trim()) return;
+            const history = getHistory();
+            const newEntry = {
+                id: Date.now(),
+                title: title.trim() || content.trim().substring(0, 15) + '...',
+                content: content,
+                date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            };
+            history.unshift(newEntry);
+            if (history.length > 20) history.pop();
+            try {
+                localStorage.setItem('reader_history', JSON.stringify(history));
+                renderHistoryList();
+            } catch(e) {}
+        }
+
+        function renderHistoryList() {
+            const container = document.getElementById('historyListContainer');
+            const history = getHistory();
+            
+            if (history.length === 0) {
+                container.innerHTML = '<div class="text-center text-xs text-zinc-400 py-6">尚無歷史閱讀記錄</div>';
+                return;
+            }
+
+            container.innerHTML = history.map(item => `
+                <div class="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 flex justify-between items-center gap-2">
+                    <div class="flex-1 cursor-pointer truncate" onclick="loadHistoryItem(${item.id})">
+                        <h4 class="text-xs font-bold truncate">${escapeHtml(item.title)}</h4>
+                        <span class="text-[10px] text-zinc-400">${item.date}</span>
+                    </div>
+                    <button onclick="deleteHistoryItem(event, ${item.id})" class="p-1.5 text-zinc-400 hover:text-red-500 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function loadHistoryItem(id) {
+            const history = getHistory();
+            const item = history.find(h => h.id === id);
+            if (item) {
+                document.getElementById('articleTitleInput').value = item.title;
+                document.getElementById('textInput').value = item.content;
+                toggleHistoryModal(false);
+                startReading();
+                showMessage('已載入歷史文章');
+            }
+        }
+
+        function deleteHistoryItem(event, id) {
+            event.stopPropagation();
+            let history = getHistory();
+            history = history.filter(h => h.id !== id);
+            localStorage.setItem('reader_history', JSON.stringify(history));
+            renderHistoryList();
+            showMessage('已刪除記錄');
+        }
+
+        function clearHistory() {
+            localStorage.removeItem('reader_history');
+            renderHistoryList();
+            showMessage('已清除所有記錄');
+        }
+
+        function toggleHistoryModal(show) {
+            const modal = document.getElementById('historyModal');
+            if (show) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        // Split text into pages based on length and font scale
+        function paginateText(text) {
+            pages = [];
+            let adaptiveChars = Math.max(100, Math.floor(CHARS_PER_PAGE * (24 / currentFontSize)));
+            for (let i = 0; i < text.length; i += adaptiveChars) {
+                pages.push(text.substring(i, i + adaptiveChars));
+            }
+            if (pages.length === 0) pages.push('');
+        }
+
+        // Start Reading Mode
+        function startReading() {
+            fullText = document.getElementById('textInput').value.trim();
+            articleTitle = document.getElementById('articleTitleInput').value.trim() || '無標題文章';
+            
+            if (!fullText) {
+                showMessage('請先貼上或輸入文字內容！');
+                return;
+            }
+
+            saveArticleToHistory(articleTitle, fullText);
+
+            paginateText(fullText);
+            currentPageIndex = 0;
+            stopAutoScroll();
+            updateReaderDisplay();
+
+            document.getElementById('inputView').classList.add('hidden');
+            document.getElementById('readerView').classList.remove('hidden');
+        }
+
+        function updateReaderDisplay() {
+            document.getElementById('readerTitleDisplay').innerText = articleTitle;
+            document.getElementById('readerContent').innerText = pages[currentPageIndex] || '';
+            document.getElementById('currentPageNum').innerText = currentPageIndex + 1;
+            document.getElementById('totalPageNum').innerText = pages.length;
+            document.getElementById('readerContent').style.fontSize = currentFontSize + 'px';
+        }
+
+        // Return to Input View (Home)
+        function backToInput() {
+            stopAutoScroll();
+            document.getElementById('readerView').classList.add('hidden');
+            document.getElementById('inputView').classList.remove('hidden');
+        }
+
+        // Handle Tap Navigation (Left: Prev Page, Right: Next Page)
+        function handleScreenTap(zone) {
+            if (isAutoScrolling) {
+                stopAutoScroll();
+                showMessage('已暫停自動跑馬燈');
+                return;
+            }
+
+            if (zone === 'left') {
+                if (currentPageIndex > 0) {
+                    currentPageIndex--;
+                    updateReaderDisplay();
+                } else {
+                    showMessage('已經是第一頁');
+                }
+            } else if (zone === 'right') {
+                if (currentPageIndex < pages.length - 1) {
+                    currentPageIndex++;
+                    updateReaderDisplay();
+                } else {
+                    showMessage('已經是最後一頁');
+                }
+            }
+        }
+
+        // Font Size Adjustment
+        function adjustFontSize(delta) {
+            currentFontSize = Math.max(14, Math.min(38, currentFontSize + delta));
+            paginateText(fullText);
+            if (currentPageIndex >= pages.length) currentPageIndex = pages.length - 1;
+            updateReaderDisplay();
+        }
+
+        // Theme Toggle (Dark vs Light)
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            const htmlEl = document.documentElement;
+            const bodyEl = document.getElementById('bodyRoot');
+            
+            if (isDarkMode) {
+                htmlEl.classList.add('dark');
+                bodyEl.classList.remove('bg-zinc-100', 'text-zinc-900');
+                bodyEl.classList.add('bg-zinc-950', 'text-zinc-100');
+            } else {
+                htmlEl.classList.remove('dark');
+                bodyEl.classList.remove('bg-zinc-950', 'text-zinc-100');
+                bodyEl.classList.add('bg-zinc-100', 'text-zinc-900');
+            }
+        }
+
+        // Auto-Scroll Marquee Mode Toggle
+        function toggleAutoScroll() {
+            if (isAutoScrolling) {
+                stopAutoScroll();
+                showMessage('已停止跑馬燈');
+            } else {
+                startAutoScroll();
+                showMessage('已開啟跑馬燈');
+            }
+        }
+
+        function startAutoScroll() {
+            isAutoScrolling = true;
+            document.getElementById('modeBtnText').innerText = '停止';
+            document.getElementById('autoScrollIndicator').style.opacity = '1';
+            
+            clearInterval(autoScrollInterval);
+            autoScrollInterval = setInterval(() => {
+                if (currentPageIndex < pages.length - 1) {
+                    currentPageIndex++;
+                    updateReaderDisplay();
+                } else {
+                    stopAutoScroll();
+                    showMessage('已閱讀至底部');
+                }
+            }, speeds[marqueeSpeedLevel - 1]);
+        }
+
+        function stopAutoScroll() {
+            isAutoScrolling = false;
+            clearInterval(autoScrollInterval);
+            document.getElementById('modeBtnText').innerText = '跑馬燈';
+            document.getElementById('autoScrollIndicator').style.opacity = '0';
+        }
+
+        // Adjust Marquee Speed (+1 for faster, -1 for slower)
+        function adjustMarqueeSpeed(direction) {
+            marqueeSpeedLevel = Math.max(1, Math.min(3, marqueeSpeedLevel + direction));
+            const speedNames = ['慢速', '正常', '快速'];
+            document.getElementById('speedIndicator').innerText = speedNames[marqueeSpeedLevel - 1];
+            showMessage(`跑馬燈速度：${speedNames[marqueeSpeedLevel - 1]}`);
+
+            if (isAutoScrolling) {
+                startAutoScroll(); // Restart interval with new speed
+            }
+        }
+
+        // Initialize on load
+        window.onload = initApp;
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function (e) {
+                    console.warn('SW registration failed', e);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

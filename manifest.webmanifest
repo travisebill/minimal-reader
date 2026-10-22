@@ -1,0 +1,43 @@
+{
+  "name": "極簡手機閱讀器",
+  "short_name": "閱讀器",
+  "description": "極簡手機閱讀器：TTS 朗讀、分頁閱讀、自動捲動、深淺色主題、閱讀歷史，可離線使用。",
+  "lang": "zh-TW",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait",
+  "background_color": "#18181b",
+  "theme_color": "#18181b",
+  "categories": [
+    "books",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

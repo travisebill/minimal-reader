@@ -2,3 +2,5 @@
 *.log
 finalicons.py
 mkicons.py
+verify*.py
+waitdeploy.py
